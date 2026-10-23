@@ -246,21 +246,21 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "YOUR_PYTHON_FAST
 
 </details>
 
-# 3. Create Docker Container
+# 2. Create Docker Container
 
 ```bash
 # ./infra/docker-compose.yml
 docker compose up --build
 ```
 
-# 4. Remove Docker Container
+# 3. Remove Docker Container
 
 ```bash
 # ./infra/docker-compose.yml
 docker compose down -v
 ```
 
-# 5. Remove Docker Cache
+# 4. Remove Docker Cache
 
 ```bash
 # The this command is Docker in the have to remove cache clean(buffer disk)
