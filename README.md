@@ -1,273 +1,150 @@
-# Mini Project Demo
+# PDF OCR & AI Document Archive
 
-[presentation-miniproject-en.pdf](https://github.com/user-attachments/files/33897024/presentation-miniproject-en.pdf)
+> [!NOTE]
+> **To read this README in Korean, [open the Korean version](./docs/README.ko.md) or access `docs/README.ko.md`.**
 
-# 1. Requirement Setting
+A web application for extracting text from PDFs with OCR and managing document processing results and run history in one place. Choose an OCR engine to process a document, then review the results and, when configured, an AI-generated summary.
 
-#### **1. Environment Setting Edit**
+> **Project presentation** · [Mini Project Presentation (PDF)](../docs/presentation-miniproject-en.pdf)
 
-> [!IMPORTANT]
-> **If you wish to use the summarization feature, you must obtain and use an OpenAI API key.**
+## Project at a Glance
 
-<details>
-<summary>.env file</summary>
+| Item | Details |
+| --- | --- |
+| Project | PDF OCR and document management web application |
+| Key features | User authentication, PDF uploads, OCR processing, document and run history, result exports, AI summaries |
+| Client | React 19, Vite |
+| API server | Java 17, Spring Boot |
+| OCR service | Python 3.12, FastAPI |
+| Database | MySQL 8 |
+| Runtime | Docker Compose |
+
+## Features
+
+- **Authentication and document management**: Sign up and log in to browse your documents and view document-level results.
+- **PDF uploads and asynchronous processing**: Upload PDFs up to 20 MB and track their processing status. The detail page periodically refreshes while a run is in progress.
+- **OCR engine selection**: Choose from AUTO, PDFIUM, TESSERACT, PADDLE, and OPENAI. The application reports engine availability based on the server's network mode and configuration.
+- **Reprocessing and run history**: Reprocess a document with a different engine and review the results of each processing run.
+- **Use document results**: View the original PDF and extracted images, and export OCR results.
+- **Optional AI features**: Configure OpenAI to enable document summaries. The UI warns users that selecting the OpenAI engine sends the document to an external service.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    User[User] --> Web[React web app]
+    Web --> API[Spring Boot API]
+    API --> DB[(MySQL)]
+    API --> OCR[FastAPI OCR service]
+    OCR --> Engines[PDFium · Tesseract · PaddleOCR]
+    OCR -. Optional external request .-> OpenAI[OpenAI]
+```
+
+The web app uses the Spring Boot API for authentication and document management. Spring Boot stores document metadata and run information in MySQL, and sends OCR processing requests to the Python FastAPI service. OpenAI integration is used only when configured and selected.
+
+## Design and Implementation Highlights
+
+- **Separation of responsibilities**: The web UI, document and authentication API, and OCR processing run as separate services.
+- **Run-based processing history**: Documents and OCR runs are managed separately, so reprocessing creates a distinct result while preserving earlier runs.
+- **Asynchronous processing experience**: Upload requests are accepted first, and users can track processing status from the document detail page.
+- **Engine and network status visibility**: Available OCR engines and external data transfers are surfaced to help users make informed choices.
+- **Per-user access control**: JWT authentication is used, and document APIs operate on documents belonging to the authenticated user.
+
+## Tech Stack
+
+| Area | Technologies |
+| --- | --- |
+| Frontend | React 19, React Router, Vite, JavaScript |
+| Backend API | Java 17, Spring Boot, Spring Data JPA, Spring Security, JWT |
+| OCR / AI API | Python 3.12, FastAPI, Pydantic |
+| OCR / PDF | PDFium, Tesseract, PaddleOCR, PDF processing tools |
+| Database | MySQL 8 |
+| Infrastructure | Docker, Docker Compose |
+
+## Getting Started
+
+### Prerequisites
+
+- Docker and Docker Compose
+- An OpenAI API key and model configuration if you want to use AI summaries or the OpenAI OCR engine
+
+### Configure environment variables
+
+The repository does not include an `infra/.env.example` file. Create an `infra/.env` file, copy the example below, and replace the passwords, JWT secret, and OpenAI values with your own.
 
 ```env
-# infra/.env.example
+# Web, backend, and OCR service ports
+WEB_FRONTEND_PORT=50001
+SPRING_SERVER_PORT=60001
+PYTHON_SERVER_PORT=60100
 
-#### Require : Environment variables for the server services
-WEB_FRONTEND_PORT=YOUR_FRONTEND_PORT
+# MySQL container and connection settings
+# MYSQL_PORT is the host port; MYSQL_CONTAINER_PORT is the container port.
+MYSQL_HOST=ocr-mysql
+MYSQL_PORT=3307
+MYSQL_CONTAINER_PORT=3306
+MYSQL_DATABASE=ocrdb
+MYSQL_USER=user
+MYSQL_PASSWORD=change-me
+MYSQL_ROOT_PASSWORD=change-me-too
 
-#### Require : MySQL environment variables for the project
-MYSQL_DATABASE=YOUR_DATABASE_NAME
-MYSQL_USER=YOUR_DATABASE_USER
-MYSQL_PASSWORD=YOUR_DATABASE_PASSWORD
-MYSQL_ROOT_PASSWORD=YOUR_DATABASE_ROOT_PASSWORD
-MYSQL_HOST=YOUR_DATABASE_HOST
-MYSQL_PORT=YOUR_DATABASE_PORT
-MYSQL_CONTAINER_PORT=YOUR_DATABASE_CONTAINER_PORT
-
-#### Require : Spring server environment variables
-SPRING_SERVER_PORT=YOUR_SPRING_SERVER_PORT
-SPRING_MYSQL_HOST=YOUR_DATABASE_HOST
-# `SPRING_MYSQL_PORT` at Spring boot engine is default use lock configuration for MySQL connecting to `3306` port
+# MySQL connection settings used by Spring Boot inside Docker
+SPRING_MYSQL_HOST=ocr-mysql
 SPRING_MYSQL_PORT=3306
-SPRING_MYSQL_DATABASE=YOUR_DATABASE_NAME
-SPRING_MYSQL_USER=YOUR_DATABASE_USER
-SPRING_MYSQL_PASSWORD=YOUR_DATABASE_PASSWORD
+SPRING_MYSQL_DATABASE=ocrdb
+SPRING_MYSQL_USER=user
+SPRING_MYSQL_PASSWORD=change-me
+JWT_SECRET=replace-with-a-random-secret-at-least-32-bytes-long
 
-JWT_SECRET=YOUR_JWT_SECRET
+# OCR service URL and client used by Spring Boot
+APP_OCR_BASE_URL=http://agent-model:60100
+APP_OCR_CLIENT=fastapi
 
-APP_OCR_BASE_URL=YOUR_OCR_BASE_URL
-APP_OCR_CLIENT=YOUR_OCR_CLIENT
-
-#### Require : Python server environment variables
-PYTHON_SERVER_PORT=YOUR_PYTHON_SERVER_PORT
-APP_NAME=YOUR_APP_NAME
-APP_VERSION=YOUR_APP_VERSION
-APP_ENV=YOUR_APP_ENV
-DEBUG=YOUR_DEBUG_SETTING
-AI_PROVIDER=YOUR_AI_PROVIDER
-
-# If you wish to use the summarization feature, you must obtain and use an OpenAI API key.
-OPENAI_API_KEY=YOUR_OPENAI_API_KEY
-# Free OpenAI API plan is default selected to `gpt-6-luna`
-OPENAI_MODEL=gpt-6-luna
-
-PDF_BACKEND=PDFIUM
-DEFAULT_OCR_ENGINE=TESSERACT
-
-# We develop default timeout of 30 and max use token to 1000
+# OCR service settings
+APP_NAME=ocr-api
+APP_VERSION=0.1.0
+APP_ENV=development
+NETWORK_ENV=OPEN
+ENGINE=PDFIUM
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=your-openai-model
 AI_TIMEOUT_SECONDS=30
 AI_MAX_OUTPUT_TOKENS=1000
-
-NETWORK_ENV=OPEN
-ENGINE=YOUR_ENGINE
 ```
 
-</details>
+`MYSQL_PORT=3307` is an example host port chosen to avoid conflicts with a local MySQL instance. Spring Boot connects to MySQL inside Docker through `SPRING_MYSQL_PORT=3306`. If the host port is already in use, change only `MYSQL_PORT`. Use a randomly generated `JWT_SECRET` of at least 32 bytes. Do not commit real passwords or API keys to the repository.
 
-#### **2. Web React Setting**
+> **OpenAI configuration required**: The OCR service currently validates its default OCR engine as `OPENAI`, and Docker Compose does not pass a `DEFAULT_OCR_ENGINE` value to the service. With the current configuration, set a valid `OPENAI_API_KEY` and `OPENAI_MODEL` to start the OCR service. To run without OpenAI, update both the environment variables passed by Compose and the OCR service's default engine configuration.
 
-> [!WARNING]
-> **Only don't host address to `localhost` is can't access in the docker container web page**
-
-<details>
-<summary>Vite Config Setting</summary>
-
-```js
-// ./web/vite.config.js
-server: {
-    host: 'YOUR_REACT_DEV_HOST',
-    port: YOUR_REACT_DEV_PORT,
-    strictPort: true,
-    proxy: {
-      '/api': {
-        target: 'http://spring-server-backend:YOUR_SPRING_SERVER_PORT',
-        changeOrigin: true,
-      }
-    },
-  },
-  preview: {
-    host: 'YOUR_REACT_PREVIEW_HOST',
-    port: YOUR_REACT_PREVIEW_PORT,
-    strictPort: true,
-    proxy: {
-      '/api': {
-        target: 'http://spring-server-backend:YOUR_SPRING_SERVER_PORT',
-        changeOrigin: true,
-      }
-    },
-  }
-```
-
-</details>
-
-<details>
-<summary>React Dockerfile</summary>
-
-```dockefile
-# ./web/Dockerfile
-FROM node:24.21-slim
-
-WORKDIR /app
-
-COPY package.json /app
-COPY package-lock.json /app
-
-COPY . .
-
-# Clean up apt cache to reduce image size
-RUN echo "Installing dependencies..."
-RUN npm install
-
-RUN echo "Version check:"
-RUN node --version && npm --version
-
-RUN npm run build
-
-EXPOSE YOUR_REACT_PORT
-
-CMD ["npm", "run", "preview", "--", "--port", "YOUR_EXPOSE_REACT_PORT"]
-```
-
-</details>
-
-#### **3. Spring boot Server Setting**
-
-> [!IMPORTANT]
-> 
-
-<details>
-<summary>Spring boot Setting Application</summary>
-
-```yaml
-# ./backend/src/main/resources/application.yaml
-spring:
-  application:
-    name: backend
-  datasource:
-    url: jdbc:mysql://${MYSQL_HOST:YOUR_DATABASE_SERVICE_NAME}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:YOUR_DATABASE_NAME}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: ${MYSQL_USER:YOUR_DATABASE_USER}
-    password: ${MYSQL_PASSWORD}
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
-  servlet:
-    multipart:
-      max-file-size: 20MB
-      max-request-size: 25MB
-app:
-  jwt:
-    secret: ${JWT_SECRET}
-    expiration-seconds: 3600
-  storage:
-    dir: ./storage
-  ocr:
-    client: mock
-    base-url: http://0.0.0.0:${PYTHON_SERVER_PORT}
-    timeout-seconds: 600
-```
-
-</details>
-
-<details>
-<summary>Spring boot Dockerfile</summary>
-
-```dockefile
-# ./backend/Dockerfile
-# Build stage for the backend application
-FROM eclipse-temurin:17-jdk AS build
-
-WORKDIR /app
-
-COPY . .
-
-RUN echo "Access authorization for the Gradle wrapper of the backend application"
-# Access authorization for the Gradle wrapper of [001 : --x]
-RUN chmod +x gradlew
-
-RUN echo "Making Gradle wrapper executable"
-RUN ./gradlew bootJar --no-daemon
-
-#---------------------------------------------------
-# Multi-stage build: final image
-
-FROM eclipse-temurin:17-jre
-
-RUN echo "Setting working directory for the final image"
-WORKDIR /app
-
-RUN echo "Copying the built JAR from the build stage"
-COPY --from=build /app/build/libs/*.jar app.jar
-
-EXPOSE YOUR_SPRING_BOOT_SERVER_PORT
-
-# ENTRYPOINT or CMD use is your want use option
-# ENTRYPOINT ["java", "-jar", "app.jar", "--server.port=YOUR_SPRING_BOOT_SERVER_PORT"]
-CMD ["java", "-jar", "app.jar", "--server.port=YOUR_SPRING_BOOT_SERVER_PORT"]
-```
-
-</details>
-
-#### **4. Python Server Setting**
-
-<details>
-<summary>Python Dockerfile</summary>
-
-```dockerfile
-# ./ocr_api/Dockerfile
-FROM python:3.12.15-slim
-
-RUN echo "Updating apt and installing system dependencies..."
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr tesseract-ocr-kor \
-    libgl1 libglib2.0-0 libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-RUN echo "Copy requirements.txt to /app"
-COPY requirements.txt .
-
-COPY . .
-
-RUN echo "Creating virtual environment at /opt/venv"
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-RUN echo "Installing Python dependencies..."
-RUN pip install --no-cache-dir -r requirements.txt
-
-EXPOSE YOUR_PYTHON_FASTAPI_PORT
-
-RUN echo "Starting the application..."
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "YOUR_PYTHON_FASTAPI_PORT"]
-```
-
-</details>
-
-# 2. Create Docker Container
+### Run the services
 
 ```bash
-# ./infra/docker-compose.yml
+cd infra
 docker compose up --build
 ```
 
-# 3. Remove Docker Container
+When the services are up, open the web app on the port configured in `.env`. The published ports for each service are also configured there.
 
-```bash
-# ./infra/docker-compose.yml
-docker compose down -v
-```
+## API Overview
 
-# 4. Remove Docker Cache
+| Service | Endpoint | Description |
+| --- | --- | --- |
+| Spring Boot | `POST /api/v1/auth/signup` | Create an account |
+| Spring Boot | `POST /api/v1/auth/login` | Log in and receive an access token |
+| Spring Boot | `GET /api/v1/engines` | List OCR engines and network mode |
+| Spring Boot | `/api/v1/documents` | Upload, list, view, and delete documents |
+| Spring Boot | `/api/v1/documents/{id}/reprocess` | Reprocess a document |
+| Spring Boot | `/api/v1/documents/{documentId}/runs` | List a document's processing runs |
+| OCR service | `GET /api/v1/ocr/engines` | Check OCR service engine availability |
+| OCR service | `POST /api/v1/ocr/extract` | Extract PDF text and return a summary |
 
-```bash
-# The this command is Docker in the have to remove cache clean(buffer disk)
-docker builder prune -a
+## Repository Structure
 
-# Option : Docker for in the have all resource remove cache, build, image, volume, network, ...etc
-docker system prune -a --volumes
+```text
+.
+├── backend/       # Spring Boot API, authentication, documents, and run history
+├── infra/         # Docker Compose and MySQL schema
+├── ocr_api/       # FastAPI OCR/AI service and tests
+├── web/           # React web client
+└── presentation-miniproject-en.pdf
 ```
