@@ -1,5 +1,7 @@
 # Mini Project Demo
 
+[presentation-miniproject-en.pdf](https://github.com/user-attachments/files/33897024/presentation-miniproject-en.pdf)
+
 # 1. Requirement Setting
 
 #### **1. Environment Setting Edit**
